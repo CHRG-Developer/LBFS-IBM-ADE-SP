@@ -1,0 +1,83 @@
+#
+#  Copyright 2015 NVIDIA Corporation
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+CUDA_PATH       ?= /usr/local/cuda-10.0
+HOST_COMPILER ?= g++
+NVCC          := $(CUDA_PATH)/bin/nvcc 
+
+
+################################################################################
+
+# Gencode arguments
+SMS ?=  30 32 35 50 60 61 70 75
+
+ifeq ($(SMS),)
+$(info >>> WARNING - no SM architectures have been specified - waiving sample <<<)
+SAMPLE_ENABLED := 0
+endif
+
+
+ifeq ($(GENCODE_FLAGS),)
+# Generate SASS code for each SM architecture listed in $(SMS)
+$(foreach sm,$(SMS),$(eval GENCODE_FLAGS +=  -gencode arch=compute_$(sm),code=sm_$(sm)))
+
+# Generate PTX code from the highest SM architecture in $(SMS) to guarantee forward-compatibility
+HIGHEST_SM := $(lastword $(sort $(SMS)))
+ifneq ($(HIGHEST_SM),)
+GENCODE_FLAGS += -gencode arch=compute_$(HIGHEST_SM),code=compute_$(HIGHEST_SM)
+endif
+endif
+
+ifeq ($(SAMPLE_ENABLED),0)
+EXEC ?= @echo "[@]"
+endif
+ GENCODE_FLAGS += -v --ptxas-options=-v 
+#GENCODE_FLAGS += -maxrregcount=128
+################################################################################
+
+CC	= g++
+src	= $(wildcard *.cpp *.cu)
+src1= $(src:.cpp=.o)
+obj	= $(src1:.cu=.o)
+# -O3 
+CCFLAGS	= -O3 -std=c++11 
+INCFLAGS = -I/usr/include/ -I/mnt/c/cygwin64/usr/local/tecplot/360ex_2018r2/include -I/mnt/c/Users/brend/Dropbox/PhD/Code/3DLBFS/3DLBFS/3DLBFS -I/mnt/c/Eigen/eigen-eigen-b3f3d4950030  -I/home/brendan/boost/install/include -I/usr/local/cuda-10.0/targets/x86_64-linux/include -I/usr/local/cuda-10.0/targets/x86_64-linux/include/crt
+LDFLAGS	= /home/brendan/boost/install/lib/libboost_system.so /home/brendan/boost/install/lib/libboost_filesystem.so /mnt/c/cygwin64/usr/local/tecplot/360ex_2018r2/bin/libtecio.so -L/usr/local/cuda-10.0/lib64 -lcuda -lcudart -L/mnt/c/cygwin64/usr/local/tecplot/360ex_2018r2/bin/
+
+NVCCFLAGS	= -std=c++11 -I/mnt/c/Users/brend/Dropbox/PhD/Code/cuda-samples-master/cuda-samples-master/Common -c  
+
+
+myprog: $(obj)
+	 $(CC) -o $@ $^ $(LDFLAGS) 
+	
+%.o : %.cpp
+	$(CC) $(CCFLAGS)$(INCFLAGS) -o $@ -c $<
+	
+%.o : %.cu
+	$(NVCC) $(NVCCFLAGS) $(INCFLAGS) $(GENCODE_FLAGS) -o $@ -c $<
+	
+.PHONY: clean
+clean:
+	rm -f $(obj) myprog
+
+#LBFS: $(obj)
+#	echo $(CC)
+#	$(CC) $(CCFLAGS) $(ACCFLAGS)  $(ACCFLAGS) -o $@  $(LDFLAGS) $<
+
+#clean:
+#	$(RM) $(BIN)
+
+#CCFLAGS	= -O3 -Kieee -std=c++11 -Mprof=ccff  -Iinclude -I/home/brendan/boost_1_64_0/prefix/include -I/usr/#local/tecplot/360ex_2018r1/include -I/home/brendan/Eigen -I/home/brendan/CGNS/CGNS-3.3.1/src -I/usr/#include/
